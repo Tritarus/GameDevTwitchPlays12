@@ -2,13 +2,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 using GameManager;
+using System.Linq;
 
 public class CommandManager : DualBehaviour, ICommandManager
 {
     #region Public Var
 
     public long cd;
-    public int maxPlayer;
+    public long stunMult;
+    public long sprainMult;
+    public int  maxPlayer;
 
     public char firstCommmandCharacter  = '!';
     public char firstStateCharacter     = '?';
@@ -27,53 +30,90 @@ public class CommandManager : DualBehaviour, ICommandManager
         {
             return null;
         }
+
         _message = _message.ToUpper();
+
         if ((!CommandIsValid(_message)) && (!StateIsValid(_message)))
         {
             return INVALIDCOMMAND;
         }
-        if (_message.Equals(firstCommmandCharacter + "JOIN"))
+
+        if (StateIsValid(_message))
         {
-            if (!userDataBase.ContainsKey(userID))
+            if (_message.Equals(firstStateCharacter + "STUN"))
             {
-                if (userDataBase.Count < maxPlayer)
+                userDataBase[userID].AddStun(_time);
+                return null;
+            }
+
+            if (_message.Equals(firstStateCharacter + "SPRAIN"))
+            {
+                userDataBase[userID].AddSprain(_time);
+                return null;
+            }
+        }
+
+        if (CommandIsValid(_message))
+        {
+            if (_message.Equals(firstCommmandCharacter + "JOIN"))
+            {
+                if (!userDataBase.ContainsKey(userID))
                 {
-                    userDataBase.Add(userID, 0);
-                    return new Command(_message, false);
+                    if (userDataBase.Count < maxPlayer)
+                    {
+                        userDataBase.Add(userID, new PlayerCTRL(userID));
+                        return new Command(_message, false);
+                    }
+                    else
+                    {
+                        return new Command("Le nombre maximum de joueur est atteint", true);
+                    }
                 }
                 else
                 {
-                    return new Command("Le nombre maximum de joueur est atteint", true);
+                    return new Command("Vous avez déja rejoins la partie", true);
                 }
             }
-            else
+
+            if (!userDataBase.ContainsKey(userID))
             {
-                return new Command("Vous avez déja rejoins la partie", true);
+                return new Command("Veuillez d'abord rejoindre la partie a l'aide de la commande " + firstCommmandCharacter + "JOIN", true);
             }
-        }
-        if ((!Cooldown(_time, userID)) && (!_message.Equals(firstCommmandCharacter + "JOIN")))
-        {
-            // TODO: Add unique command identifier (for matching) IN ADDITION to its personalised message
-            // TODO: SWITCH TO ENGLISH!
-            // TODO: Change (shorten) message? eg: Please wait longer before posting again
-            return new Command("Le cooldown entre 2 commandes n'est pas terminé", true);
-        }
-        if (!userDataBase.ContainsKey(userID))
-        {
-            return new Command("Veuillez d'abord rejoindre la partie a l'aide de la commande " + firstCommmandCharacter + "JOIN", true);
-        }
-        userDataBase[userID] = _time;
-        return new Command(_message, false);
+
+            if (userDataBase[userID].states.ContainsKey("STUN"))
+            {
+                if (userDataBase[userID].StateIsActive("STUN", _time))
+                {
+                    return new Command("Vous ne pouvez pas effectuer d'action car vous êtes STUN", true);
+                }
+            }
+
+            if (userDataBase[userID].states.ContainsKey("SPRAIN") && (_message.Equals(firstCommmandCharacter + "DIG")))
+            {
+                if (userDataBase[userID].StateIsActive("SPRAIN", _time))
+                {
+                    return new Command("Vous ne pouvez pas creuser car vous vous êtes fais une entorse", true);
+                }
+            }
+
+            if ((!Cooldown(_time, userID)) && (!_message.Equals(firstCommmandCharacter + "JOIN")))
+            {
+                return new Command("Le cooldown entre 2 commandes n'est pas terminé", true);
+            }
+
+            userDataBase[userID].time = _time;
+            return new Command(_message, false);
+        }   
     }
 
     #endregion
 
     #region Private Func
 
-    private bool IsACommand(string message)
+    private bool IsACommand(string _message)
     {
         bool isValid;
-        if (message[0] == firstCommmandCharacter)
+        if (_message[0] == firstCommmandCharacter)
         {
             isValid = true;
         }
@@ -84,10 +124,10 @@ public class CommandManager : DualBehaviour, ICommandManager
         return isValid;
     }
 
-    private bool IsAState(string message)
+    private bool IsAState(string _message)
     {
         bool isValid;
-        if (message[0] == firstStateCharacter)
+        if (_message[0] == firstStateCharacter)
         {
             isValid = true;
         }
@@ -98,12 +138,12 @@ public class CommandManager : DualBehaviour, ICommandManager
         return isValid;
     }
 
-    private bool CommandIsValid(string message)
+    private bool CommandIsValid(string _message)
     {
         bool isValid = false;
         for (int i = 0; i < validCommand.Count; i++)
         {
-            if (message.Equals(firstCommmandCharacter + validCommand[i]))
+            if (_message.Equals(firstCommmandCharacter + validCommand[i]))
             {
                 isValid = true;
                 break;
@@ -112,12 +152,12 @@ public class CommandManager : DualBehaviour, ICommandManager
         return isValid;
     }
 
-    private bool StateIsValid(string message)
+    private bool StateIsValid(string _message)
     {
         bool isValid = false;
         for (int i = 0; i < validState.Count; i++)
         {
-            if (message.Equals(firstStateCharacter + validState[i]))
+            if (_message.Equals(firstStateCharacter + validState[i]))
             {
                 isValid = true;
                 break;
@@ -126,18 +166,18 @@ public class CommandManager : DualBehaviour, ICommandManager
         return isValid;
     }
 
-    private bool Cooldown(long time, string name)
+    private bool Cooldown(long _time, string _name)
     {
         long oldTime;
-        if (userDataBase.ContainsKey(name))
+        if (userDataBase.ContainsKey(_name))
         {
-            oldTime = userDataBase[name];
+            oldTime = userDataBase[_name];
         }
         else
         {
             oldTime = 0;   
         }
-        long value = time - oldTime; 
+        long value = _time - oldTime; 
 
         if (value < cd)
         {
@@ -164,14 +204,12 @@ public class CommandManager : DualBehaviour, ICommandManager
     [SerializeField]
     private List<string> validState = new List<string>
     {
-        "NORMAL"    ,
         "STUN"      ,
         "SPRAIN"    ,
     };
 
-    private Dictionary<string, long> _userDataBase = new Dictionary<string, long>();
-
-    public Dictionary<string, long> userDataBase
+    private Dictionary<string, PlayerCTRL> _userDataBase = new Dictionary<string, PlayerCTRL>();
+    public Dictionary<string, PlayerCTRL> userDataBase
     {
         get { return _userDataBase; }
         set { _userDataBase = value; }
@@ -183,7 +221,6 @@ public class CommandManager : DualBehaviour, ICommandManager
 public class Command:ICommand
 {
     private bool _feedbackUser;
-
     public bool feedbackUser
     {
         get { return _feedbackUser; }
@@ -191,7 +228,6 @@ public class Command:ICommand
     }
 
     private string _response;
-
     public string response
     {
         get { return _response; }
@@ -202,14 +238,14 @@ public class Command:ICommand
     {
         feedbackUser = feedback;
         response = message;
-
     }
 }
 
 public class PlayerCTRL
 {
-    private string _userID;
+    CommandManager _commandManager = new CommandManager();
 
+    private string _userID;
     public string userID
     {
         get { return _userID; }
@@ -217,26 +253,80 @@ public class PlayerCTRL
     }
 
     private long _time;
-
     public long time
     {
         get { return _time; }
         set { _time = value; }
     }
 
-    private List<State> _states;
-
-    public List<State> states
+    private Dictionary<string, State> _states;
+    public Dictionary<string, State> states
     {
         get { return _states; }
         set { _states = value; }
     }
+
+    public PlayerCTRL(string username)
+    {
+        userID = username;
+        time = 0;
+    }
+
+    public void AddState(string _name, long _until)
+    {
+        if (!states.ContainsKey(_name))
+        {
+            states.Add(_name, new State(_name, _until));
+        }
+        else
+        {
+            states[_name].time = _until;
+        }
+    }
+
+    public void AddStun(long _time)
+    {
+        AddState("STUN", (_time + (_commandManager.cd * _commandManager.stunMult)));
+    }
+
+    public void AddSprain(long _time)
+    {
+        AddState("SPRAIN", (_time + (_commandManager.cd * _commandManager.sprainMult)));
+    }
+
+    public void RemoveState(string _name)
+    {
+        if (states.ContainsKey(_name))
+        {
+            states.Remove(_name);
+        }
+    }
+
+    public bool StateIsActive(string _name, long _time)
+    {
+        if (states.ContainsKey(_name))
+        {
+            if (states[_name].time > _time)
+            {
+                return true;
+            }
+            else
+            {
+                RemoveState(_name);
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
 }
 
 public class State
 {
     private string _name;
-
     public string name
     {
         get { return _name; }
@@ -244,7 +334,6 @@ public class State
     }
 
     private long _time;
-
     public long time
     {
         get { return _time; }
@@ -257,4 +346,3 @@ public class State
         time = stateTime;
     }
 }
-
