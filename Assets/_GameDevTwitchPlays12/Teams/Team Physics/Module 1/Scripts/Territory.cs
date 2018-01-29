@@ -1,22 +1,27 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Homebrew;
 
 public class Territory  : MonoBehaviour
 {
 
     #region Public Members
-    
+
 
     #endregion
 
 
     #region Public Void
+    public delegate void IsCentral(bool end,Faction faction);
+    private static IsCentral m_isCentral;
+
     public bool HasSpecial
     {
         get { return m_hasSpecial; }
         set { m_hasSpecial = value; }
     }
+
     public bool IsHQ
     {
         get { return m_isHQ; }
@@ -38,12 +43,18 @@ public class Territory  : MonoBehaviour
         set { m_manager = value; }
     }
 
+    public List<PlayerCharacter> GetListOfPlayerOnThisTerritory()
+    {
+        return m_listPlayerCharOnTerritory;
+    }
+
     public int GetPlayerNumOnTerritory()
     {
     return m_listPlayerCharOnTerritory.Count;
     }
-
-
+    public Timer m_timer;
+    public float centralTime=60;
+    public Faction m_playerFaction= new Faction();
     #endregion
 
 
@@ -61,27 +72,34 @@ public class Territory  : MonoBehaviour
     {
         PlayerCharacter pc = col.GetComponent<PlayerCharacter>();
         m_listPlayerCharOnTerritory.Add(pc);
-        if(m_listPlayerCharOnTerritory.Count>1)
+        if ((m_currentColor != pc.Faction.FactionColor)&&(!IsHQ))
         {
-            Battle();
+            ColorChange(pc);
         }
-        else
+        if(IsCenter)
         {
-            if (m_currentColor != pc.Faction.FactionColor)
+            if(pc.hasGlasses)
             {
-                ColorChange(pc);
+                NotifyIsCentral(pc.Faction);
             }
         }
+        else if(pc.hasGlasses && !IsCenter)
+        {
+            NotifyIsNotCentral(pc.Faction);
+        }
     }
+
     private void OnTriggerExit(Collider col)
     {
         m_listPlayerCharOnTerritory.Remove(col.GetComponent<PlayerCharacter>());
+      
+
     }
 
     private void ColorChange(PlayerCharacter pc)
     {
-        
-        if (m_currentColor != Color.white)//donc si ça appartient a un autre joueur, on leur vole donc -1 en nombre territoires pour eux
+        //previous territory owner looses Nbrterritory
+        if (m_currentColor != Color.white)
         {
             if (m_currentColor == Color.red)
             {
@@ -101,7 +119,11 @@ public class Territory  : MonoBehaviour
             }
         }
         m_currentColor = pc.Faction.FactionColor;
-        gameObject.GetComponent<MeshRenderer>().material.color = pc.Faction.FactionColor;
+        Color col = gameObject.GetComponentInChildren<MeshRenderer>().material.color;
+        col = pc.Faction.FactionColor;
+        col.a = 100f;
+        gameObject.GetComponentInChildren<MeshRenderer>().material.color = col;
+        //new territory owner gains Nbrterritory
         if (m_currentColor == Color.red)
         {
             m_manager.FactionRED.NbrTerritories++;
@@ -140,4 +162,35 @@ public class Territory  : MonoBehaviour
     private PhysicsManager m_manager;
     #endregion
 
+    private void TimerOnCentral(bool bol) {
+        //Partie gagnée
+        StartCoroutine("GameOver");
+    }
+    IEnumerator GameOver()
+    {
+
+        yield return new WaitForSeconds(10);
+        
+    }
+
+    public static void AddListener(IsCentral isCentral)
+    {
+        m_isCentral += isCentral;
+
+    }
+    public static void RemoveListener(IsCentral isCentral)
+    {
+        m_isCentral -= isCentral;
+
+    }
+
+
+    public static void NotifyIsCentral(Faction faction)
+    {
+        m_isCentral(true, faction );
+    }
+    public static void NotifyIsNotCentral(Faction faction)
+    {
+        m_isCentral(false,faction);
+    }
 }

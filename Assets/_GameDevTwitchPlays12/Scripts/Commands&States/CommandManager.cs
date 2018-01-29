@@ -1,17 +1,20 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using GameManager;
 using System.Linq;
+using System;
+
 
 public class CommandManager : DualBehaviour, ICommandManager
 {
     #region Public Var
 
-    public long cd;
-    public long stunMult;
-    public long sprainMult;
-    public int  maxPlayer;
+
+    public long cd = 2;
+    public long stunMult = 5;
+    public long sprainMult = 5;
+    public int  maxPlayer = 20;
 
     public char firstCommmandCharacter  = '!';
     public char firstStateCharacter     = '?';
@@ -40,6 +43,14 @@ public class CommandManager : DualBehaviour, ICommandManager
         {
             return INVALIDCOMMAND;
         }
+
+
+        if(userDataBase.ContainsKey(userID))
+        {
+            var c = userDataBase[userID].states.Count;
+            Debug.LogWarning(userID + " " + String.Join(" ", (from s in userDataBase[userID].states select s.Key + " " + (_time - s.Value.time)).ToArray<string>()));
+        }
+        
 
         if (StateIsValid(_message))
         {
@@ -245,6 +256,7 @@ public class Command:ICommand
     }
 }
 
+[System.Serializable]
 public class PlayerCTRL
 {
     CommandManager _commandManager = new CommandManager();
@@ -263,7 +275,8 @@ public class PlayerCTRL
         set { _time = value; }
     }
 
-    private Dictionary<string, State> _states;
+
+    private Dictionary<string, State> _states = new Dictionary<string, State>();
     public Dictionary<string, State> states
     {
         get { return _states; }
