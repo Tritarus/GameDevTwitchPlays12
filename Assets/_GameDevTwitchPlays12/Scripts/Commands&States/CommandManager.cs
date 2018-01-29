@@ -20,6 +20,9 @@ public class CommandManager : DualBehaviour, ICommandManager
 
     #endregion
 
+
+  
+
     #region Public Func
 
     public ICommand Parse(string _username, int _plateform, string _message, long _time)
@@ -103,7 +106,8 @@ public class CommandManager : DualBehaviour, ICommandManager
 
             userDataBase[userID].time = _time;
             return new Command(_message, false);
-        }   
+        }
+        throw new System.Exception("[CommandManger] SHOULD NOT BE THERE: " + _username + ":" + _message + "("+_time+")" );
     }
 
     #endregion
@@ -171,7 +175,7 @@ public class CommandManager : DualBehaviour, ICommandManager
         long oldTime;
         if (userDataBase.ContainsKey(_name))
         {
-            oldTime = userDataBase[_name];
+            oldTime = userDataBase[_name].time;
         }
         else
         {
